@@ -1,0 +1,178 @@
+import { createClient } from "./supabase"
+
+export interface JournalEntry {
+  id: string
+  user_id: string
+  title: string
+  content: string
+  category_id?: string
+  category?: {
+    id: string
+    name: string
+    color: string
+  }
+  tags: string[]
+  word_count: number
+  reading_time: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Category {
+  id: string
+  name: string
+  color: string
+  created_at: string
+}
+
+export async function getJournalEntries(userId?: string): Promise<JournalEntry[]> {
+  const supabase = createClient()
+
+  let query = supabase
+    .from("journal_entries")
+    .select(`
+      *,
+      category:categories(id, name, color)
+    `)
+    .order("created_at", { ascending: false })
+
+  if (userId) {
+    query = query.eq("user_id", userId)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data || []
+}
+
+export async function getJournalEntry(id: string): Promise<JournalEntry | null> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .select(`
+      *,
+      category:categories(id, name, color)
+    `)
+    .eq("id", id)
+    .single()
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return null // Entry not found
+    }
+    throw new Error(error.message)
+  }
+
+  return data
+}
+
+export async function createJournalEntry(
+  entry: Omit<JournalEntry, "id" | "created_at" | "updated_at">,
+): Promise<JournalEntry> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .insert([entry])
+    .select(`
+      *,
+      category:categories(id, name, color)
+    `)
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data
+}
+
+export async function updateJournalEntry(id: string, updates: Partial<JournalEntry>): Promise<JournalEntry> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .update(updates)
+    .eq("id", id)
+    .select(`
+      *,
+      category:categories(id, name, color)
+    `)
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data
+}
+
+export async function deleteJournalEntry(id: string): Promise<void> {
+  const supabase = createClient()
+
+  const { error } = await supabase.from("journal_entries").delete().eq("id", id)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+export async function getCategories(): Promise<Category[]> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase.from("categories").select("*").order("name")
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data || []
+}
+
+export async function getJournalStats(userId: string) {
+  const supabase = createClient()
+
+  // Get total entries
+  const { count: totalEntries } = await supabase
+    .from("journal_entries")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+
+  // Get this week's entries
+  const oneWeekAgo = new Date()
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+
+  const { count: weekEntries } = await supabase
+    .from("journal_entries")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("created_at", oneWeekAgo.toISOString())
+
+  // Get entries for the last 7 days for chart
+  const { data: weeklyData } = await supabase
+    .from("journal_entries")
+    .select("created_at")
+    .eq("user_id", userId)
+    .gte("created_at", oneWeekAgo.toISOString())
+    .order("created_at")
+
+  // Process weekly data for chart
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+  const weeklyChart = days.map((day) => ({ day, entries: 0 }))
+
+  weeklyData?.forEach((entry) => {
+    const dayIndex = new Date(entry.created_at).getDay()
+    weeklyChart[dayIndex].entries++
+  })
+
+  return {
+    totalEntries: totalEntries || 0,
+    weekEntries: weekEntries || 0,
+    weeklyChart,
+  }
+}

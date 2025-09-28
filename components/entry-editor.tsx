@@ -14,21 +14,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, Save, Eye, Tag, X, Plus, Calendar, BookOpen } from "lucide-react"
 import Link from "next/link"
+import { getJournalEntry, createJournalEntry, updateJournalEntry, getCategories } from "@/lib/journal"
 
 interface EntryEditorProps {
   entryId?: string
 }
 
-const categories = [
-  "Learning",
-  "Problem Solving",
-  "Collaboration",
-  "Implementation",
-  "Performance",
-  "Career",
-  "Tools",
-  "Reflection",
-]
+interface Category {
+  id: string
+  name: string
+  color: string
+}
 
 const suggestedTags = [
   "React",
@@ -72,38 +68,67 @@ export function EntryEditor({ entryId }: EntryEditorProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [isPreview, setIsPreview] = useState(false)
   const [newTag, setNewTag] = useState("")
+  const [categories, setCategories] = useState<Category[]>([])
+  const [isLoadingData, setIsLoadingData] = useState(true)
 
   const [formData, setFormData] = useState({
     title: "",
     content: "",
-    category: "",
+    category_id: "",
     tags: [] as string[],
   })
 
-  // Mock loading existing entry data
   useEffect(() => {
-    if (entryId && entryId !== "new") {
-      // Simulate loading existing entry
-      setFormData({
-        title: "Learned React Server Components",
-        content:
-          "Today I dove deep into React Server Components and how they work with Next.js 13+. The concept of running components on the server to reduce client-side JavaScript is fascinating.\n\nKey learnings:\n- RSCs run on the server and can directly access databases\n- They reduce the amount of JavaScript sent to the client\n- They enable better SEO and initial page load performance\n- They work seamlessly with client components\n\nI built a small demo application to test the concepts and was impressed by the performance improvements. The developer experience is also quite smooth once you understand the mental model.\n\nNext steps:\n- Explore streaming and Suspense integration\n- Test with larger applications\n- Share findings with the team",
-        category: "Learning",
-        tags: ["React", "Next.js", "SSR", "Performance"],
-      })
+    const loadData = async () => {
+      try {
+        const categoriesData = await getCategories()
+        setCategories(categoriesData)
+
+        if (entryId && entryId !== "new") {
+          const entryData = await getJournalEntry(entryId)
+          if (entryData) {
+            setFormData({
+              title: entryData.title,
+              content: entryData.content,
+              category_id: entryData.category?.id || "",
+              tags: entryData.tags || [],
+            })
+          }
+        }
+      } catch (error) {
+        console.error("Error loading data:", error)
+      } finally {
+        setIsLoadingData(false)
+      }
     }
+
+    loadData()
   }, [entryId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    try {
+      const entryData = {
+        title: formData.title,
+        content: formData.content,
+        category_id: formData.category_id || null,
+        tags: formData.tags,
+      }
 
-    // Redirect back to entries list
-    router.push("/entries")
-    setIsLoading(false)
+      if (entryId && entryId !== "new") {
+        await updateJournalEntry(entryId, entryData)
+      } else {
+        await createJournalEntry(entryData)
+      }
+
+      router.push("/entries")
+    } catch (error) {
+      console.error("Error saving entry:", error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleInputChange = (field: string, value: string) => {
@@ -134,6 +159,18 @@ export function EntryEditor({ entryId }: EntryEditorProps) {
     .trim()
     .split(/\s+/)
     .filter((word) => word.length > 0).length
+
+  if (isLoadingData) {
+    return (
+      <div className="flex-1 overflow-auto">
+        <div className="p-6 space-y-6">
+          <div className="flex items-center justify-center py-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex-1 overflow-auto">
@@ -229,7 +266,9 @@ export function EntryEditor({ entryId }: EntryEditorProps) {
                       <BookOpen className="h-4 w-4" />
                       <span>{wordCount} words</span>
                     </div>
-                    {formData.category && <Badge variant="outline">{formData.category}</Badge>}
+                    {formData.category_id && (
+                      <Badge variant="outline">{categories.find((c) => c.id === formData.category_id)?.name}</Badge>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -266,14 +305,14 @@ export function EntryEditor({ entryId }: EntryEditorProps) {
                 <CardDescription>Organize your entry</CardDescription>
               </CardHeader>
               <CardContent>
-                <Select value={formData.category} onValueChange={(value) => handleInputChange("category", value)}>
+                <Select value={formData.category_id} onValueChange={(value) => handleInputChange("category_id", value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

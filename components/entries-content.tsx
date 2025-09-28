@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,78 +16,31 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Search, Plus, Filter, Calendar, Tag, MoreVertical, Edit, Trash2, BookOpen, Clock } from "lucide-react"
+import { getJournalEntries, deleteJournalEntry, getCategories } from "@/lib/journal"
+import { useRouter } from "next/navigation"
 
-// Mock data for journal entries
-const mockEntries = [
-  {
-    id: 1,
-    title: "Learned React Server Components",
-    content:
-      "Today I dove deep into React Server Components and how they work with Next.js 13+. The concept of running components on the server to reduce client-side JavaScript is fascinating...",
-    category: "Learning",
-    tags: ["React", "Next.js", "SSR", "Performance"],
-    createdAt: "2024-01-15T10:30:00Z",
-    updatedAt: "2024-01-15T10:30:00Z",
-    wordCount: 450,
-  },
-  {
-    id: 2,
-    title: "Debugging Production Memory Leak",
-    content:
-      "Encountered a critical memory leak in our Node.js microservice that was causing the application to crash every few hours. Used heap dumps and profiling tools to identify the issue...",
-    category: "Problem Solving",
-    tags: ["Node.js", "Debugging", "Memory", "Production", "Performance"],
-    createdAt: "2024-01-14T15:45:00Z",
-    updatedAt: "2024-01-14T16:20:00Z",
-    wordCount: 680,
-  },
-  {
-    id: 3,
-    title: "Team Code Review Best Practices",
-    content:
-      "Had an excellent discussion with the team about code review practices. We established new guidelines for constructive feedback and decided to implement automated checks...",
-    category: "Collaboration",
-    tags: ["Code Review", "Team", "Best Practices", "Process"],
-    createdAt: "2024-01-13T09:15:00Z",
-    updatedAt: "2024-01-13T09:15:00Z",
-    wordCount: 320,
-  },
-  {
-    id: 4,
-    title: "TypeScript Advanced Types Deep Dive",
-    content:
-      "Exploring conditional types, template literal types, and mapped types in TypeScript. These advanced features are incredibly powerful for creating type-safe APIs...",
-    category: "Learning",
-    tags: ["TypeScript", "Types", "Advanced", "API Design"],
-    createdAt: "2024-01-12T14:20:00Z",
-    updatedAt: "2024-01-12T14:20:00Z",
-    wordCount: 520,
-  },
-  {
-    id: 5,
-    title: "Implementing OAuth 2.0 with PKCE",
-    content:
-      "Successfully implemented OAuth 2.0 with PKCE (Proof Key for Code Exchange) for our mobile application. The security implications and flow were more complex than expected...",
-    category: "Implementation",
-    tags: ["OAuth", "Security", "Mobile", "Authentication"],
-    createdAt: "2024-01-11T11:30:00Z",
-    updatedAt: "2024-01-11T11:30:00Z",
-    wordCount: 750,
-  },
-  {
-    id: 6,
-    title: "Database Query Optimization",
-    content:
-      "Spent the day optimizing slow database queries. Identified several N+1 query problems and implemented proper indexing strategies. Performance improved by 60%...",
-    category: "Performance",
-    tags: ["Database", "SQL", "Optimization", "Performance", "Indexing"],
-    createdAt: "2024-01-10T16:45:00Z",
-    updatedAt: "2024-01-10T16:45:00Z",
-    wordCount: 420,
-  },
-]
+interface JournalEntry {
+  id: string
+  title: string
+  content: string
+  category: {
+    id: string
+    name: string
+    color: string
+  } | null
+  tags: string[]
+  word_count: number
+  reading_time: number
+  created_at: string
+  updated_at: string
+}
 
-const categories = ["All", "Learning", "Problem Solving", "Collaboration", "Implementation", "Performance"]
+interface Category {
+  id: string
+  name: string
+  color: string
+}
+
 const sortOptions = [
   { value: "newest", label: "Newest First" },
   { value: "oldest", label: "Oldest First" },
@@ -96,10 +49,40 @@ const sortOptions = [
 ]
 
 export function EntriesContent() {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [sortBy, setSortBy] = useState("newest")
-  const [entries] = useState(mockEntries)
+  const [entries, setEntries] = useState<JournalEntry[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [entriesData, categoriesData] = await Promise.all([getJournalEntries(), getCategories()])
+        setEntries(entriesData)
+        setCategories(categoriesData)
+      } catch (error) {
+        console.error("Error loading data:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
+  const handleDeleteEntry = async (entryId: string) => {
+    if (confirm("Are you sure you want to delete this entry?")) {
+      try {
+        await deleteJournalEntry(entryId)
+        setEntries(entries.filter((entry) => entry.id !== entryId))
+      } catch (error) {
+        console.error("Error deleting entry:", error)
+      }
+    }
+  }
 
   const filteredEntries = entries
     .filter((entry) => {
@@ -108,20 +91,20 @@ export function EntriesContent() {
         entry.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
         entry.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
 
-      const matchesCategory = selectedCategory === "All" || entry.category === selectedCategory
+      const matchesCategory = selectedCategory === "All" || entry.category?.name === selectedCategory
 
       return matchesSearch && matchesCategory
     })
     .sort((a, b) => {
       switch (sortBy) {
         case "newest":
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         case "oldest":
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         case "title":
           return a.title.localeCompare(b.title)
         case "category":
-          return a.category.localeCompare(b.category)
+          return (a.category?.name || "").localeCompare(b.category?.name || "")
         default:
           return 0
       }
@@ -138,15 +121,34 @@ export function EntriesContent() {
     })
   }
 
-  const getCategoryColor = (category: string) => {
-    const colors: Record<string, string> = {
-      Learning: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-      "Problem Solving": "bg-red-500/10 text-red-500 border-red-500/20",
-      Collaboration: "bg-green-500/10 text-green-500 border-green-500/20",
-      Implementation: "bg-purple-500/10 text-purple-500 border-purple-500/20",
-      Performance: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+  const getCategoryColor = (category: Category | null) => {
+    if (!category) return "bg-gray-500/10 text-gray-500 border-gray-500/20"
+
+    // Convert hex color to Tailwind classes
+    const colorMap: Record<string, string> = {
+      "#3b82f6": "bg-blue-500/10 text-blue-500 border-blue-500/20",
+      "#ef4444": "bg-red-500/10 text-red-500 border-red-500/20",
+      "#22c55e": "bg-green-500/10 text-green-500 border-green-500/20",
+      "#8b5cf6": "bg-purple-500/10 text-purple-500 border-purple-500/20",
+      "#f97316": "bg-orange-500/10 text-orange-500 border-orange-500/20",
+      "#06b6d4": "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
+      "#ec4899": "bg-pink-500/10 text-pink-500 border-pink-500/20",
+      "#84cc16": "bg-lime-500/10 text-lime-500 border-lime-500/20",
     }
-    return colors[category] || "bg-gray-500/10 text-gray-500 border-gray-500/20"
+
+    return colorMap[category.color] || "bg-gray-500/10 text-gray-500 border-gray-500/20"
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 overflow-auto">
+        <div className="p-6 space-y-6">
+          <div className="flex items-center justify-center py-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -188,9 +190,10 @@ export function EntriesContent() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="All">All</SelectItem>
                     {categories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
+                      <SelectItem key={category.id} value={category.name}>
+                        {category.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -220,7 +223,7 @@ export function EntriesContent() {
             {selectedCategory !== "All" && ` in ${selectedCategory}`}
             {searchQuery && ` matching "${searchQuery}"`}
           </span>
-          <span>{filteredEntries.reduce((acc, entry) => acc + entry.wordCount, 0).toLocaleString()} total words</span>
+          <span>{filteredEntries.reduce((acc, entry) => acc + entry.word_count, 0).toLocaleString()} total words</span>
         </div>
 
         {/* Entries Grid */}
@@ -239,12 +242,14 @@ export function EntriesContent() {
                       </Link>
                     </CardTitle>
                     <div className="flex items-center space-x-2 mb-2">
-                      <Badge variant="outline" className={getCategoryColor(entry.category)}>
-                        {entry.category}
-                      </Badge>
+                      {entry.category && (
+                        <Badge variant="outline" className={getCategoryColor(entry.category)}>
+                          {entry.category.name}
+                        </Badge>
+                      )}
                       <div className="flex items-center text-xs text-muted-foreground">
                         <Clock className="mr-1 h-3 w-3" />
-                        {formatDate(entry.createdAt)}
+                        {formatDate(entry.created_at)}
                       </div>
                     </div>
                   </div>
@@ -263,7 +268,7 @@ export function EntriesContent() {
                           Edit
                         </Link>
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive">
+                      <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteEntry(entry.id)}>
                         <Trash2 className="mr-2 h-4 w-4" />
                         Delete
                       </DropdownMenuItem>
@@ -289,7 +294,7 @@ export function EntriesContent() {
                   </div>
                   <div className="flex items-center text-xs text-muted-foreground">
                     <BookOpen className="mr-1 h-3 w-3" />
-                    {entry.wordCount} words
+                    {entry.word_count} words
                   </div>
                 </div>
               </CardContent>

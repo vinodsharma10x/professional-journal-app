@@ -1,6 +1,7 @@
 "use client"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -23,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ModeToggle } from "@/components/mode-toggle"
 import { Code2, LayoutDashboard, BookOpen, FileText, Sparkles, Settings, LogOut, ChevronUp, Plus } from "lucide-react"
-import { getCurrentUser, signOut } from "@/lib/auth"
+import { signOut, getCurrentUser, type AuthUser } from "@/lib/auth"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -36,11 +37,27 @@ const navigation = [
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const user = getCurrentUser()
+  const [user, setUser] = useState<AuthUser | null>(null)
 
-  const handleSignOut = () => {
-    signOut()
-    router.push("/")
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const currentUser = await getCurrentUser()
+        setUser(currentUser)
+      } catch (error) {
+        console.error("Error loading user:", error)
+      }
+    }
+    loadUser()
+  }, [])
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      router.push("/")
+    } catch (error) {
+      console.error("Error signing out:", error)
+    }
   }
 
   return (
@@ -88,12 +105,19 @@ export function AppSidebar() {
             <Button variant="ghost" className="w-full justify-start p-2">
               <div className="flex items-center space-x-3 flex-1">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.avatar || "/placeholder.svg"} alt={user?.name} />
-                  <AvatarFallback className="bg-primary/10 text-primary">{user?.name?.charAt(0) || "U"}</AvatarFallback>
+                  <AvatarImage
+                    src={user?.profile?.avatar_url || "/placeholder.svg"}
+                    alt={user?.profile?.name || "User"}
+                  />
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    {user?.profile?.name?.charAt(0) || user?.email?.charAt(0) || "U"}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 text-left">
-                  <p className="text-sm font-medium text-foreground">{user?.name || "User"}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{user?.plan || "free"} plan</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {user?.profile?.name || user?.email?.split("@")[0] || "User"}
+                  </p>
+                  <p className="text-xs text-muted-foreground capitalize">{user?.profile?.plan || "free"} plan</p>
                 </div>
                 <ChevronUp className="h-4 w-4 text-muted-foreground" />
               </div>

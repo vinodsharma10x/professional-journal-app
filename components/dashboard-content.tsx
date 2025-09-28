@@ -8,19 +8,11 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { Line, LineChart, XAxis, YAxis, ResponsiveContainer, Bar, BarChart } from "recharts"
 import Link from "next/link"
 import { BookOpen, TrendingUp, Target, Calendar, Plus, ArrowRight, Clock, Tag, Sparkles, FileText } from "lucide-react"
-import { getCurrentUser } from "@/lib/auth"
+import { getCurrentUser, type AuthUser } from "@/lib/auth"
+import { getJournalEntries, getJournalStats, type JournalEntry } from "@/lib/journal"
+import { useEffect, useState } from "react"
 
-// Mock data for charts and recent entries
-const weeklyData = [
-  { day: "Mon", entries: 2 },
-  { day: "Tue", entries: 1 },
-  { day: "Wed", entries: 3 },
-  { day: "Thu", entries: 2 },
-  { day: "Fri", entries: 4 },
-  { day: "Sat", entries: 1 },
-  { day: "Sun", entries: 2 },
-]
-
+// Mock data for monthly trends (would be replaced with real data)
 const monthlyData = [
   { month: "Jan", entries: 12, insights: 8 },
   { month: "Feb", entries: 18, insights: 12 },
@@ -30,41 +22,6 @@ const monthlyData = [
   { month: "Jun", entries: 25, insights: 16 },
 ]
 
-const recentEntries = [
-  {
-    id: 1,
-    title: "Learned React Server Components",
-    category: "Learning",
-    date: "2 hours ago",
-    tags: ["React", "Next.js", "SSR"],
-    excerpt: "Deep dive into RSCs and how they improve performance...",
-  },
-  {
-    id: 2,
-    title: "Debugging Production Issue",
-    category: "Problem Solving",
-    date: "1 day ago",
-    tags: ["Debugging", "Production", "Performance"],
-    excerpt: "Encountered a memory leak in our Node.js service...",
-  },
-  {
-    id: 3,
-    title: "Team Code Review Insights",
-    category: "Collaboration",
-    date: "2 days ago",
-    tags: ["Code Review", "Team", "Best Practices"],
-    excerpt: "Great discussion about error handling patterns...",
-  },
-  {
-    id: 4,
-    title: "TypeScript Advanced Types",
-    category: "Learning",
-    date: "3 days ago",
-    tags: ["TypeScript", "Types", "Advanced"],
-    excerpt: "Exploring conditional types and template literals...",
-  },
-]
-
 const goals = [
   { name: "Write 20 entries this month", progress: 65, current: 13, target: 20 },
   { name: "Learn 3 new technologies", progress: 33, current: 1, target: 3 },
@@ -72,7 +29,63 @@ const goals = [
 ]
 
 export function DashboardContent() {
-  const user = getCurrentUser()
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [recentEntries, setRecentEntries] = useState<JournalEntry[]>([])
+  const [stats, setStats] = useState({
+    totalEntries: 0,
+    weekEntries: 0,
+    weeklyChart: [] as { day: string; entries: number }[],
+  })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        const currentUser = await getCurrentUser()
+        if (!currentUser) return
+
+        setUser(currentUser)
+
+        // Load recent entries
+        const entries = await getJournalEntries(currentUser.id)
+        setRecentEntries(entries.slice(0, 4)) // Get latest 4 entries
+
+        // Load stats
+        const journalStats = await getJournalStats(currentUser.id)
+        setStats(journalStats)
+      } catch (error) {
+        console.error("Error loading dashboard data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDashboardData()
+  }, [])
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
+
+    if (diffInHours < 1) return "Just now"
+    if (diffInHours < 24) return `${diffInHours} hours ago`
+    if (diffInHours < 48) return "1 day ago"
+    return `${Math.floor(diffInHours / 24)} days ago`
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 overflow-auto">
+        <div className="p-6 space-y-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-muted rounded w-1/3 mb-2"></div>
+            <div className="h-4 bg-muted rounded w-1/2"></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex-1 overflow-auto">
@@ -80,7 +93,9 @@ export function DashboardContent() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Welcome back, {user?.name?.split(" ")[0]}!</h1>
+            <h1 className="text-3xl font-bold text-foreground">
+              Welcome back, {user?.profile?.name?.split(" ")[0] || user?.email?.split("@")[0] || "there"}!
+            </h1>
             <p className="text-muted-foreground">Here's what's happening with your developer journey.</p>
           </div>
           <Link href="/entries/new">
@@ -99,9 +114,9 @@ export function DashboardContent() {
               <BookOpen className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">127</div>
+              <div className="text-2xl font-bold">{stats.totalEntries}</div>
               <p className="text-xs text-muted-foreground">
-                <span className="text-primary">+12%</span> from last month
+                <span className="text-primary">+{stats.weekEntries}</span> from last month
               </p>
             </CardContent>
           </Card>
@@ -112,10 +127,8 @@ export function DashboardContent() {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">15</div>
-              <p className="text-xs text-muted-foreground">
-                <span className="text-primary">+3</span> from last week
-              </p>
+              <div className="text-2xl font-bold">{stats.weekEntries}</div>
+              <p className="text-xs text-muted-foreground">Keep up the momentum!</p>
             </CardContent>
           </Card>
 
@@ -165,7 +178,7 @@ export function DashboardContent() {
                 className="h-[200px]"
               >
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={weeklyData}>
+                  <BarChart data={stats.weeklyChart}>
                     <XAxis dataKey="day" />
                     <YAxis />
                     <ChartTooltip content={<ChartTooltipContent />} />
@@ -244,29 +257,46 @@ export function DashboardContent() {
               </Link>
             </CardHeader>
             <CardContent className="space-y-4">
-              {recentEntries.map((entry) => (
-                <div key={entry.id} className="flex items-start space-x-4 p-4 rounded-lg border border-border/50">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <h3 className="text-sm font-medium text-foreground truncate">{entry.title}</h3>
-                      <Badge variant="secondary" className="text-xs">
-                        {entry.category}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{entry.excerpt}</p>
-                    <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                      <div className="flex items-center space-x-1">
-                        <Clock className="h-3 w-3" />
-                        <span>{entry.date}</span>
+              {recentEntries.length > 0 ? (
+                recentEntries.map((entry) => (
+                  <div key={entry.id} className="flex items-start space-x-4 p-4 rounded-lg border border-border/50">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <h3 className="text-sm font-medium text-foreground truncate">{entry.title}</h3>
+                        {entry.category && (
+                          <Badge variant="secondary" className="text-xs">
+                            {entry.category.name}
+                          </Badge>
+                        )}
                       </div>
-                      <div className="flex items-center space-x-1">
-                        <Tag className="h-3 w-3" />
-                        <span>{entry.tags.join(", ")}</span>
+                      <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                        {entry.content.substring(0, 150)}...
+                      </p>
+                      <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                        <div className="flex items-center space-x-1">
+                          <Clock className="h-3 w-3" />
+                          <span>{formatDate(entry.created_at)}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Tag className="h-3 w-3" />
+                          <span>{entry.tags.slice(0, 2).join(", ")}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No entries yet. Start your journey!</p>
+                  <Link href="/entries/new">
+                    <Button className="mt-4">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create First Entry
+                    </Button>
+                  </Link>
                 </div>
-              ))}
+              )}
             </CardContent>
           </Card>
 

@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -12,6 +11,8 @@ import { Separator } from "@/components/ui/separator"
 import { ModeToggle } from "@/components/mode-toggle"
 import { Code2, Mail, Lock, User, ArrowLeft, Github } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { signIn, signUp } from "@/lib/auth"
+import { useToast } from "@/hooks/use-toast"
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true)
@@ -23,17 +24,56 @@ export default function AuthPage() {
     confirmPassword: "",
   })
   const router = useRouter()
+  const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    console.log("[v0] Starting authentication process", { isLogin, email: formData.email })
 
-    localStorage.setItem("devjournal_auth", "true")
-    router.push("/dashboard")
-    setIsLoading(false)
+    try {
+      if (isLogin) {
+        console.log("[v0] Attempting sign in")
+        const result = await signIn(formData.email, formData.password)
+        console.log("[v0] Sign in result:", result)
+
+        toast({
+          title: "Welcome back!",
+          description: "You have been signed in successfully.",
+        })
+        router.push("/dashboard")
+      } else {
+        if (formData.password !== formData.confirmPassword) {
+          console.log("[v0] Password mismatch")
+          toast({
+            title: "Passwords don't match",
+            description: "Please make sure your passwords match.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        console.log("[v0] Attempting sign up")
+        const result = await signUp(formData.name, formData.email, formData.password)
+        console.log("[v0] Sign up result:", result)
+
+        toast({
+          title: "Account created!",
+          description: "Please check your email to verify your account.",
+        })
+      }
+    } catch (error) {
+      console.log("[v0] Authentication error:", error)
+      toast({
+        title: "Authentication failed",
+        description: error instanceof Error ? error.message : "An error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+      console.log("[v0] Authentication process completed")
+    }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

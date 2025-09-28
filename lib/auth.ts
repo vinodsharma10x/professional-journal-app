@@ -1,64 +1,122 @@
-// Mock authentication utilities
-// In a real app, this would integrate with your auth provider
+import { createClient } from "./supabase"
+import type { User } from "@supabase/supabase-js"
 
-export interface User {
+export interface Profile {
   id: string
   name: string
   email: string
-  avatar?: string
+  avatar_url?: string
   plan: "free" | "pro"
-  createdAt: Date
+  created_at: string
+  updated_at: string
 }
 
-export const mockUser: User = {
-  id: "1",
-  name: "John Doe",
-  email: "john@example.com",
-  avatar: "/diverse-user-avatars.png",
-  plan: "pro",
-  createdAt: new Date("2024-01-15"),
+export interface AuthUser extends User {
+  profile?: Profile
 }
 
-export function signIn(email: string, password: string): Promise<User> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      localStorage.setItem("devjournal_auth", "true")
-      localStorage.setItem("devjournal_user", JSON.stringify(mockUser))
-      resolve(mockUser)
-    }, 1000)
+export async function signIn(email: string, password: string) {
+  console.log("[v0] signIn called with email:", email)
+
+  const supabase = createClient()
+  console.log("[v0] Supabase client created:", !!supabase)
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
   })
+
+  console.log("[v0] signInWithPassword result:", { data: !!data, error: error?.message })
+
+  if (error) {
+    console.log("[v0] signIn error:", error)
+    throw new Error(error.message)
+  }
+
+  return data
 }
 
-export function signUp(name: string, email: string, password: string): Promise<User> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const newUser = { ...mockUser, name, email }
-      localStorage.setItem("devjournal_auth", "true")
-      localStorage.setItem("devjournal_user", JSON.stringify(newUser))
-      resolve(newUser)
-    }, 1000)
+export async function signUp(name: string, email: string, password: string) {
+  console.log("[v0] signUp called with:", { name, email })
+
+  const supabase = createClient()
+  console.log("[v0] Supabase client created:", !!supabase)
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/auth/callback`,
+      data: {
+        name,
+      },
+    },
   })
+
+  console.log("[v0] signUp result:", { data: !!data, error: error?.message })
+
+  if (error) {
+    console.log("[v0] signUp error:", error)
+    throw new Error(error.message)
+  }
+
+  return data
 }
 
-export function signOut(): void {
-  localStorage.removeItem("devjournal_auth")
-  localStorage.removeItem("devjournal_user")
-}
+export async function signOut() {
+  const supabase = createClient()
 
-export function getCurrentUser(): User | null {
-  if (typeof window === "undefined") return null
+  const { error } = await supabase.auth.signOut()
 
-  const userStr = localStorage.getItem("devjournal_user")
-  if (!userStr) return null
-
-  try {
-    return JSON.parse(userStr)
-  } catch {
-    return null
+  if (error) {
+    throw new Error(error.message)
   }
 }
 
-export function isAuthenticated(): boolean {
-  if (typeof window === "undefined") return false
-  return localStorage.getItem("devjournal_auth") === "true"
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const supabase = createClient()
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+
+  if (error || !user) {
+    return null
+  }
+
+  // Get user profile
+  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+
+  return {
+    ...user,
+    profile,
+  }
+}
+
+export async function getSession() {
+  const supabase = createClient()
+
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return session
+}
+
+export async function resetPassword(email: string) {
+  const supabase = createClient()
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/auth/reset-password`,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
 }
