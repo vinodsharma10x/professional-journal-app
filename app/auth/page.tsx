@@ -1,7 +1,6 @@
 "use client"
 
-import type React from "react"
-import { useState } from "react"
+import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,8 +9,9 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ModeToggle } from "@/components/mode-toggle"
 import { Code2, Mail, Lock, User, ArrowLeft, Github } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { signIn, signUp } from "@/lib/auth"
+import { Toaster } from "@/components/ui/toaster"
 import { useToast } from "@/hooks/use-toast"
 
 export default function AuthPage() {
@@ -24,7 +24,36 @@ export default function AuthPage() {
     confirmPassword: "",
   })
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
+
+  // Handle URL error parameters
+  useEffect(() => {
+    const error = searchParams.get('error')
+    const errorDescription = searchParams.get('error_description')
+    
+    if (error) {
+      let title = "Authentication Error"
+      let description = errorDescription || "An error occurred during authentication"
+      
+      if (error === 'access_denied' && errorDescription?.includes('expired')) {
+        title = "Email Link Expired"
+        description = "Your email confirmation link has expired. Please try signing up again."
+      } else if (error === 'Could not authenticate user') {
+        title = "Authentication Failed"
+        description = "There was a problem confirming your email. Please try again."
+      }
+      
+      toast({
+        title,
+        description,
+        variant: "destructive",
+      })
+      
+      // Clean URL
+      router.replace('/auth')
+    }
+  }, [searchParams, toast, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,11 +67,13 @@ export default function AuthPage() {
         const result = await signIn(formData.email, formData.password)
         console.log("[v0] Sign in result:", result)
 
-        toast({
-          title: "Welcome back!",
-          description: "You have been signed in successfully.",
-        })
-        router.push("/dashboard")
+        if (result.user) {
+          toast({
+            title: "Welcome back!",
+            description: "You have been signed in successfully.",
+          })
+          router.push("/dashboard")
+        }
       } else {
         if (formData.password !== formData.confirmPassword) {
           console.log("[v0] Password mismatch")
@@ -59,15 +90,36 @@ export default function AuthPage() {
         console.log("[v0] Sign up result:", result)
 
         toast({
-          title: "Account created!",
-          description: "Please check your email to verify your account.",
+          title: "Account created successfully!",
+          description: "Please check your email and click the confirmation link to activate your account before signing in.",
         })
+        
+        // Clear form and switch to login mode
+        setFormData({ name: "", email: "", password: "", confirmPassword: "" })
+        setIsLogin(true)
       }
     } catch (error) {
       console.log("[v0] Authentication error:", error)
+      
+      const errorMessage = error instanceof Error ? error.message : "An error occurred"
+      let title = "Authentication failed"
+      let description = errorMessage
+
+      // Provide more specific error messages
+      if (errorMessage.includes("Email not confirmed")) {
+        title = "Email not confirmed"
+        description = "Please check your email and click the confirmation link before signing in."
+      } else if (errorMessage.includes("Invalid login credentials")) {
+        title = "Invalid credentials"
+        description = "Please check your email and password, or confirm your email first."
+      } else if (errorMessage.includes("User not found")) {
+        title = "Account not found"
+        description = "No account found with this email. Please sign up first."
+      }
+
       toast({
-        title: "Authentication failed",
-        description: error instanceof Error ? error.message : "An error occurred",
+        title,
+        description,
         variant: "destructive",
       })
     } finally {
@@ -277,6 +329,7 @@ export default function AuthPage() {
           </div>
         </div>
       </div>
+      <Toaster />
     </div>
   )
 }

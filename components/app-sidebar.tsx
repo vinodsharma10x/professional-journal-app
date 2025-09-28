@@ -24,7 +24,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ModeToggle } from "@/components/mode-toggle"
 import { Code2, LayoutDashboard, BookOpen, FileText, Sparkles, Settings, LogOut, ChevronUp, Plus } from "lucide-react"
-import { signOut, getCurrentUser, type AuthUser } from "@/lib/auth"
+import { signOut } from "@/lib/auth"
+import { createClient } from "@/lib/supabase"
+import type { User } from "@supabase/supabase-js"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -37,13 +39,14 @@ const navigation = [
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const [user, setUser] = useState<AuthUser | null>(null)
+  const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const currentUser = await getCurrentUser()
-        setUser(currentUser)
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        setUser(user)
       } catch (error) {
         console.error("Error loading user:", error)
       }
@@ -106,18 +109,18 @@ export function AppSidebar() {
               <div className="flex items-center space-x-3 flex-1">
                 <Avatar className="h-8 w-8">
                   <AvatarImage
-                    src={user?.profile?.avatar_url || "/placeholder.svg"}
-                    alt={user?.profile?.name || "User"}
+                    src={user?.user_metadata?.avatar_url || "/placeholder.svg"}
+                    alt={user?.user_metadata?.name || "User"}
                   />
                   <AvatarFallback className="bg-primary/10 text-primary">
-                    {user?.profile?.name?.charAt(0) || user?.email?.charAt(0) || "U"}
+                    {user?.user_metadata?.name?.charAt(0) || user?.email?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 text-left">
                   <p className="text-sm font-medium text-foreground">
-                    {user?.profile?.name || user?.email?.split("@")[0] || "User"}
+                    {user?.user_metadata?.name || user?.email?.split("@")[0] || "User"}
                   </p>
-                  <p className="text-xs text-muted-foreground capitalize">{user?.profile?.plan || "free"} plan</p>
+                  <p className="text-xs text-muted-foreground capitalize">free plan</p>
                 </div>
                 <ChevronUp className="h-4 w-4 text-muted-foreground" />
               </div>

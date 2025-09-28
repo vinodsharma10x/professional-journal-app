@@ -8,7 +8,8 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { Line, LineChart, XAxis, YAxis, ResponsiveContainer, Bar, BarChart } from "recharts"
 import Link from "next/link"
 import { BookOpen, TrendingUp, Target, Calendar, Plus, ArrowRight, Clock, Tag, Sparkles, FileText } from "lucide-react"
-import { getCurrentUser, type AuthUser } from "@/lib/auth"
+import { createClient } from "@/lib/supabase"
+import type { User } from "@supabase/supabase-js"
 import { getJournalEntries, getJournalStats, type JournalEntry } from "@/lib/journal"
 import { useEffect, useState } from "react"
 
@@ -29,7 +30,7 @@ const goals = [
 ]
 
 export function DashboardContent() {
-  const [user, setUser] = useState<AuthUser | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [recentEntries, setRecentEntries] = useState<JournalEntry[]>([])
   const [stats, setStats] = useState({
     totalEntries: 0,
@@ -41,17 +42,18 @@ export function DashboardContent() {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        const currentUser = await getCurrentUser()
-        if (!currentUser) return
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
 
-        setUser(currentUser)
+        setUser(user)
 
         // Load recent entries
-        const entries = await getJournalEntries(currentUser.id)
+        const entries = await getJournalEntries(user.id)
         setRecentEntries(entries.slice(0, 4)) // Get latest 4 entries
 
         // Load stats
-        const journalStats = await getJournalStats(currentUser.id)
+        const journalStats = await getJournalStats(user.id)
         setStats(journalStats)
       } catch (error) {
         console.error("Error loading dashboard data:", error)
@@ -94,7 +96,7 @@ export function DashboardContent() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">
-              Welcome back, {user?.profile?.name?.split(" ")[0] || user?.email?.split("@")[0] || "there"}!
+              Welcome back, {user?.user_metadata?.name?.split(" ")[0] || user?.email?.split("@")[0] || "there"}!
             </h1>
             <p className="text-muted-foreground">Here's what's happening with your developer journey.</p>
           </div>

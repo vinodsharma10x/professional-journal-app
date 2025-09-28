@@ -2,12 +2,13 @@
 
 import type React from "react"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
-import { getCurrentUser } from "@/lib/auth"
+import { createClient } from "@/lib/supabase"
+import type { User } from "@supabase/supabase-js"
 
 export default function AppLayout({
   children,
@@ -16,16 +17,37 @@ export default function AppLayout({
 }) {
   const router = useRouter()
   const pathname = usePathname()
-  const user = getCurrentUser()
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Redirect to auth if not logged in
-    if (!user && !pathname.startsWith("/auth")) {
-      router.push("/auth")
+    const checkAuth = async () => {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (!user && !pathname.startsWith("/auth")) {
+          router.push("/auth")
+          return
+        }
+        
+        setUser(user)
+      } catch (error) {
+        console.error("Auth check failed:", error)
+        router.push("/auth")
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [user, router, pathname])
 
-  if (!user) {
+    checkAuth()
+  }, [router, pathname])
+
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>
+  }
+
+  if (!user && !pathname.startsWith("/auth")) {
     return null // Will redirect in useEffect
   }
 
