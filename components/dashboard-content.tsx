@@ -12,22 +12,7 @@ import { createClient } from "@/lib/supabase"
 import type { User } from "@supabase/supabase-js"
 import { getJournalEntries, getJournalStats, type JournalEntry } from "@/lib/journal"
 import { useEffect, useState } from "react"
-
-// Mock data for monthly trends (would be replaced with real data)
-const monthlyData = [
-  { month: "Jan", entries: 12, insights: 8 },
-  { month: "Feb", entries: 18, insights: 12 },
-  { month: "Mar", entries: 15, insights: 10 },
-  { month: "Apr", entries: 22, insights: 15 },
-  { month: "May", entries: 28, insights: 18 },
-  { month: "Jun", entries: 25, insights: 16 },
-]
-
-const goals = [
-  { name: "Write 20 entries this month", progress: 65, current: 13, target: 20 },
-  { name: "Learn 3 new technologies", progress: 33, current: 1, target: 3 },
-  { name: "Complete React certification", progress: 80, current: 8, target: 10 },
-]
+import { ContributionHeatmap } from "@/components/contribution-heatmap"
 
 export function DashboardContent() {
   const [user, setUser] = useState<User | null>(null)
@@ -36,6 +21,7 @@ export function DashboardContent() {
     totalEntries: 0,
     weekEntries: 0,
     weeklyChart: [] as { day: string; entries: number }[],
+    monthlyChart: [] as { month: string; entries: number }[], // Added monthlyChart to stats state
   })
   const [loading, setLoading] = useState(true)
 
@@ -43,7 +29,9 @@ export function DashboardContent() {
     const loadDashboardData = async () => {
       try {
         const supabase = createClient()
-        const { data: { user } } = await supabase.auth.getUser()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
         if (!user) return
 
         setUser(user)
@@ -159,6 +147,9 @@ export function DashboardContent() {
           </Card>
         </div>
 
+        {/* Contribution Heatmap */}
+        {user && <ContributionHeatmap userId={user.id} />}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Weekly Activity Chart */}
           <Card className="border-border/50 bg-card/50 backdrop-blur">
@@ -174,7 +165,7 @@ export function DashboardContent() {
                 config={{
                   entries: {
                     label: "Entries",
-                    color: "hsl(var(--primary))",
+                    color: "hsl(142 76% 36%)", // Using a bright green color for better contrast
                   },
                 }}
                 className="h-[200px]"
@@ -198,24 +189,23 @@ export function DashboardContent() {
                 <Calendar className="h-5 w-5 text-primary" />
                 <span>Monthly Trends</span>
               </CardTitle>
-              <CardDescription>Entries and AI insights over time</CardDescription>
+              <CardDescription>Your journal entries over the past 6 months</CardDescription>{" "}
+              {/* Updated description to reflect real data */}
             </CardHeader>
             <CardContent>
               <ChartContainer
                 config={{
                   entries: {
                     label: "Entries",
-                    color: "hsl(var(--primary))",
-                  },
-                  insights: {
-                    label: "AI Insights",
-                    color: "hsl(var(--accent))",
+                    color: "hsl(142 76% 36%)", // Using bright green for better visibility
                   },
                 }}
                 className="h-[200px]"
               >
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthlyData}>
+                  <LineChart data={stats.monthlyChart}>
+                    {" "}
+                    {/* Using real monthly data from stats */}
                     <XAxis dataKey="month" />
                     <YAxis />
                     <ChartTooltip content={<ChartTooltipContent />} />
@@ -223,15 +213,8 @@ export function DashboardContent() {
                       type="monotone"
                       dataKey="entries"
                       stroke="var(--color-entries)"
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="insights"
-                      stroke="var(--color-insights)"
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
+                      strokeWidth={3} // Increased stroke width for better visibility
+                      dot={{ r: 5, fill: "var(--color-entries)" }} // Larger dots with proper fill
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -366,3 +349,9 @@ export function DashboardContent() {
     </div>
   )
 }
+
+const goals = [
+  { name: "Write 20 entries this month", progress: 65, current: 13, target: 20 },
+  { name: "Learn 3 new technologies", progress: 33, current: 1, target: 3 },
+  { name: "Complete React certification", progress: 80, current: 8, target: 10 },
+]

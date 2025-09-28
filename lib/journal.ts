@@ -194,9 +194,41 @@ export async function getJournalStats(userId: string) {
     weeklyChart[dayIndex].entries++
   })
 
+  const sixMonthsAgo = new Date()
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+
+  const { data: monthlyData } = await supabase
+    .from("journal_entries")
+    .select("created_at")
+    .eq("user_id", userId)
+    .gte("created_at", sixMonthsAgo.toISOString())
+    .order("created_at")
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const monthlyChart: { month: string; entries: number }[] = []
+
+  // Create array for last 6 months
+  for (let i = 5; i >= 0; i--) {
+    const date = new Date()
+    date.setMonth(date.getMonth() - i)
+    const monthName = monthNames[date.getMonth()]
+    monthlyChart.push({ month: monthName, entries: 0 })
+  }
+
+  // Count entries per month
+  monthlyData?.forEach((entry) => {
+    const entryDate = new Date(entry.created_at)
+    const monthName = monthNames[entryDate.getMonth()]
+    const monthEntry = monthlyChart.find((m) => m.month === monthName)
+    if (monthEntry) {
+      monthEntry.entries++
+    }
+  })
+
   return {
     totalEntries: totalEntries || 0,
     weekEntries: weekEntries || 0,
     weeklyChart,
+    monthlyChart, // Added monthly chart data to return object
   }
 }
