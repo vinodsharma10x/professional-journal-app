@@ -72,13 +72,36 @@ export async function getJournalEntry(id: string): Promise<JournalEntry | null> 
 }
 
 export async function createJournalEntry(
-  entry: Omit<JournalEntry, "id" | "created_at" | "updated_at">,
+  entry: Omit<JournalEntry, "id" | "user_id" | "created_at" | "updated_at">,
 ): Promise<JournalEntry> {
   const supabase = createClient()
 
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    throw new Error("User not authenticated")
+  }
+
+  // Calculate word count and reading time
+  const wordCount = entry.content
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0).length
+  const readingTime = Math.max(1, Math.ceil(wordCount / 200))
+
+  const entryWithUser = {
+    ...entry,
+    user_id: user.id, // Set user_id for RLS policy
+    word_count: wordCount,
+    reading_time: readingTime,
+  }
+
   const { data, error } = await supabase
     .from("journal_entries")
-    .insert([entry])
+    .insert([entryWithUser])
     .select(`
       *,
       category:categories(id, name, color)
@@ -86,6 +109,7 @@ export async function createJournalEntry(
     .single()
 
   if (error) {
+    console.error("[v0] Supabase insert error:", error)
     throw new Error(error.message)
   }
 

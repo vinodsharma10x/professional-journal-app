@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Search, Plus, Filter, Calendar, Tag, MoreVertical, Edit, Trash2, BookOpen, Clock } from "lucide-react"
 import { getJournalEntries, deleteJournalEntry, getCategories } from "@/lib/journal"
+import { highlightText, getTextPreview } from "@/lib/text-utils"
 import { useRouter } from "next/navigation"
 
 interface JournalEntry {
@@ -139,6 +140,15 @@ export function EntriesContent() {
     return colorMap[category.color] || "bg-gray-500/10 text-gray-500 border-gray-500/20"
   }
 
+  const renderHighlightedText = (text: string, isTitle = false) => {
+    if (!searchQuery.trim()) return text
+
+    const highlighted = isTitle
+      ? highlightText(text, searchQuery)
+      : highlightText(getTextPreview(text, searchQuery, 200), searchQuery)
+    return <span dangerouslySetInnerHTML={{ __html: highlighted }} />
+  }
+
   if (isLoading) {
     return (
       <div className="flex-1 overflow-auto">
@@ -238,7 +248,7 @@ export function EntriesContent() {
                   <div className="flex-1 min-w-0">
                     <CardTitle className="text-lg line-clamp-2 mb-2">
                       <Link href={`/entries/${entry.id}`} className="hover:text-primary transition-colors">
-                        {entry.title}
+                        {renderHighlightedText(entry.title, true)}
                       </Link>
                     </CardTitle>
                     <div className="flex items-center space-x-2 mb-2">
@@ -277,13 +287,17 @@ export function EntriesContent() {
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <CardDescription className="line-clamp-3 mb-4">{entry.content}</CardDescription>
+                <CardDescription className="line-clamp-3 mb-4">{renderHighlightedText(entry.content)}</CardDescription>
                 <div className="flex items-center justify-between">
                   <div className="flex flex-wrap gap-1">
                     {entry.tags.slice(0, 3).map((tag) => (
                       <Badge key={tag} variant="secondary" className="text-xs">
                         <Tag className="mr-1 h-2 w-2" />
-                        {tag}
+                        {searchQuery.trim() && tag.toLowerCase().includes(searchQuery.toLowerCase()) ? (
+                          <span dangerouslySetInnerHTML={{ __html: highlightText(tag, searchQuery) }} />
+                        ) : (
+                          tag
+                        )}
                       </Badge>
                     ))}
                     {entry.tags.length > 3 && (
